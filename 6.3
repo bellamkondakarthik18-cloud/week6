@@ -1,0 +1,24 @@
+class LikeButton extends StatefulWidget {
+  const LikeButton({super.key});
+
+  @override
+  State<LikeButton> createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<LikeButton> {
+  bool liked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(
+        liked ? Icons.favorite : Icons.favorite_border,
+      ),
+      onPressed: () {
+        setState(() {
+          liked = !liked;
+        });
+      },
+    );
+  }
+}
