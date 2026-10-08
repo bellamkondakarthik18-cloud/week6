@@ -1,0 +1,355 @@
+import 'package:flutter/material.dart';
+
+void main() => runApp(const MyApp());
+
+// ===========================================================================
+// THEMING
+// ===========================================================================
+
+/// Custom theme extension: lets you add your own design tokens to ThemeData.
+@immutable
+class BrandColors extends ThemeExtension<BrandColors> {
+  final Color success;
+  final Color warning;
+
+  const BrandColors({required this.success, required this.warning});
+
+  @override
+  BrandColors copyWith({Color? success, Color? warning}) =>
+      BrandColors(success: success ?? this.success, warning: warning ?? this.warning);
+
+  @override
+  BrandColors lerp(ThemeExtension<BrandColors>? other, double t) {
+    if (other is! BrandColors) return this;
+    return BrandColors(
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+    );
+  }
+}
+
+class AppTheme {
+  static ThemeData _base(Brightness brightness, BrandColors brand) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: Colors.indigo,
+      brightness: brightness,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      // Typography
+      textTheme: const TextTheme(
+        headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        bodyMedium: TextStyle(fontSize: 15),
+      ),
+      // Component themes: set once, applies to every widget of that type
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.primaryContainer,
+        foregroundColor: scheme.onPrimaryContainer,
+        centerTitle: true,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 2,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+      ),
+      extensions: [brand],
+    );
+  }
+
+  static final ThemeData light = _base(
+    Brightness.light,
+    const BrandColors(success: Color(0xFF2E7D32), warning: Color(0xFFF9A825)),
+  );
+
+  static final ThemeData dark = _base(
+    Brightness.dark,
+    const BrandColors(success: Color(0xFF81C784), warning: Color(0xFFFFD54F)),
+  );
+}
+
+// ===========================================================================
+// APP (holds ThemeMode state)
+// ===========================================================================
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _mode = ThemeMode.system;
+
+  void _toggle(bool isDark) =>
+      setState(() => _mode = isDark ? ThemeMode.dark : ThemeMode.light);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Custom Widgets & Theming',
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: _mode,
+      home: DemoPage(onThemeToggle: _toggle),
+    );
+  }
+}
+
+// ===========================================================================
+// CUSTOM WIDGETS
+// ===========================================================================
+
+/// 1. Custom StatelessWidget (from the notes) with parameters.
+///    If no color is given, it falls back to the theme's primary color.
+class CustomButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+  final Color? color;
+  final IconData? icon;
+
+  const CustomButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.color,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color ?? Theme.of(context).colorScheme.primary;
+    final fg = ThemeData.estimateBrightnessForColor(bg) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
+      onPressed: onPressed,
+      icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
+      label: Text(label),
+    );
+  }
+}
+
+/// 2. Custom widget composed of other widgets and styled from the theme.
+class ProfileCard extends StatelessWidget {
+  final String name;
+  final String role;
+  final VoidCallback? onTap;
+
+  const ProfileCard({super.key, required this.name, required this.role, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: ListTile(
+        onTap: onTap,
+        leading: CircleAvatar(
+          backgroundColor: theme.colorScheme.secondaryContainer,
+          child: Text(name[0], style: theme.textTheme.titleMedium),
+        ),
+        title: Text(name, style: theme.textTheme.titleMedium),
+        subtitle: Text(role, style: theme.textTheme.bodyMedium),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+/// 3. Custom widget that reads a ThemeExtension.
+enum StatusType { success, warning }
+
+class StatusBadge extends StatelessWidget {
+  final String text;
+  final StatusType type;
+
+  const StatusBadge({super.key, required this.text, required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = Theme.of(context).extension<BrandColors>()!;
+    final color = type == StatusType.success ? brand.success : brand.warning;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+/// 4. Custom StatefulWidget: interactive and keeps its own state.
+class LikeButton extends StatefulWidget {
+  final int initialCount;
+  final ValueChanged<bool>? onChanged;
+
+  const LikeButton({super.key, this.initialCount = 0, this.onChanged});
+
+  @override
+  State<LikeButton> createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<LikeButton> {
+  late int _count = widget.initialCount;
+  bool _liked = false;
+
+  void _toggle() {
+    setState(() {
+      _liked = !_liked;
+      _count += _liked ? 1 : -1;
+    });
+    widget.onChanged?.call(_liked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return TextButton.icon(
+      onPressed: _toggle,
+      icon: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: Icon(
+          _liked ? Icons.favorite : Icons.favorite_border,
+          key: ValueKey(_liked),
+          color: _liked ? scheme.error : scheme.onSurfaceVariant,
+        ),
+      ),
+      label: Text('$_count'),
+    );
+  }
+}
+
+/// 5. Reusable labeled text field; decoration comes from InputDecorationTheme.
+class LabeledField extends StatelessWidget {
+  final String label;
+  final TextEditingController? controller;
+  final bool obscure;
+
+  const LabeledField({
+    super.key,
+    required this.label,
+    this.controller,
+    this.obscure = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        decoration: InputDecoration(labelText: label),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// DEMO PAGE
+// ===========================================================================
+
+class DemoPage extends StatelessWidget {
+  final ValueChanged<bool> onThemeToggle;
+
+  const DemoPage({super.key, required this.onThemeToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Custom Widgets & Theming'),
+        actions: [
+          Switch(value: isDark, onChanged: onThemeToggle),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Buttons', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              // Uses theme primary color
+              CustomButton(label: 'Default', onPressed: () {}),
+              // Overrides color + adds icon
+              CustomButton(
+                label: 'Delete',
+                icon: Icons.delete,
+                color: Colors.red,
+                onPressed: () {},
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          Text('Cards', style: theme.textTheme.headlineSmall),
+          ProfileCard(name: 'Asha Rao', role: 'Flutter Developer', onTap: () {}),
+          ProfileCard(name: 'Vikram Singh', role: 'UI Designer', onTap: () {}),
+          const SizedBox(height: 24),
+
+          Text('Theme Extension', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              StatusBadge(text: 'Paid', type: StatusType.success),
+              SizedBox(width: 12),
+              StatusBadge(text: 'Pending', type: StatusType.warning),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          Text('Stateful custom widget', style: theme.textTheme.headlineSmall),
+          const LikeButton(initialCount: 12),
+          const SizedBox(height: 24),
+
+          Text('Form fields', style: theme.textTheme.headlineSmall),
+          const LabeledField(label: 'Email'),
+          const LabeledField(label: 'Password', obscure: true),
+          const SizedBox(height: 24),
+
+          Text('Local theme override', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          // Theme(...) overrides the theme for just this subtree
+          Theme(
+            data: theme.copyWith(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.teal,
+                brightness: theme.brightness,
+              ),
+            ),
+            child: Builder(
+              builder: (ctx) => CustomButton(label: 'Teal subtree', onPressed: () {}),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
